@@ -1,0 +1,271 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: Creates a simple VPC across two Availability Zones
+
+Parameters:
+  pVpcCidrBlock:
+    Type: String
+    Default: "10.0.0.0/16"
+    Description: "CIDR block of this VPC network"
+
+  pPubSub1CidrBlock:
+    Type: String
+    Default: "10.0.10.0/24"
+    Description: "CIDR block for Public Subnet 1"
+
+  pPubSub2CidrBlock:
+    Type: String
+    Default: "10.0.20.0/24"
+    Description: "CIDR block for Public Subnet 2"
+    
+  pPriSub1CidrBlock:
+    Type: String
+    Default: "10.0.110.0/24"
+    Description: "CIDR block for Private Subnet 1"
+
+  pPriSub2CidrBlock:
+    Type: String
+    Default: "10.0.120.0/24"
+    Description: "CIDR block for Private Subnet 2"
+    
+  pProSub1CidrBlock:
+    Type: String
+    Default: "10.0.210.0/24"
+    Description: "CIDR block for Protected Subnet 1"
+
+  pProSub2CidrBlock:
+    Type: String
+    Default: "10.0.220.0/24"
+    Description: "CIDR block for Protected Subnet 2"
+
+Metadata:
+  AWS::CloudFormation::Interface:
+    ParameterGroups:
+      - 
+        Label:
+          default: "Networking"
+        Parameters:
+          - pVpcCidrBlock
+          - pPubSub1CidrBlock
+          - pPubSub2CidrBlock
+          - pPriSub1CidrBlock
+          - pPriSub2CidrBlock
+          - pProSub1CidrBlock
+          - pProSub2CidrBlock
+    ParameterLabels:
+      pVpcCidrBlock:
+        default: "VPC CIDR Block"
+      pPubSub1CidrBlock:
+        default: "CIDR Block for Public Subnet 1"
+      pPubSub2CidrBlock:
+        default: "CIDR Block for Public Subnet 2"
+      pPriSub1CidrBlock:
+        default: "CIDR Block for Private Subnet 1"
+      pPriSub2CidrBlock:
+        default: "CIDR Block for Private Subnet 2"
+      pProSub1CidrBlock:
+        default: "CIDR Block for Protected Subnet 1"
+      pProSub2CidrBlock:
+        default: "CIDR Block for Protected Subnet 2"
+
+Resources:
+  ##########
+  ## VPC, Public and Private Subnets
+  ##########
+ 
+  rVpc:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: !Ref pVpcCidrBlock
+      EnableDnsSupport: true
+      EnableDnsHostnames: true
+
+  rPubSub1:
+    Type: AWS::EC2::Subnet
+    Properties:
+      AvailabilityZone: !Select [0, !GetAZs ""]
+      CidrBlock: !Ref pPubSub1CidrBlock
+      MapPublicIpOnLaunch: true
+      VpcId: !Ref rVpc
+
+  rPubSub2:
+    Type: AWS::EC2::Subnet
+    Properties:
+      AvailabilityZone: !Select [1, !GetAZs ""]
+      CidrBlock: !Ref pPubSub2CidrBlock
+      MapPublicIpOnLaunch: true
+      VpcId: !Ref rVpc
+
+  rPriSub1:
+    Type: AWS::EC2::Subnet
+    Properties:
+      AvailabilityZone: !Select [0, !GetAZs ""]
+      CidrBlock: !Ref pPriSub1CidrBlock
+      MapPublicIpOnLaunch: false
+      VpcId: !Ref rVpc
+
+  rPriSub2:
+    Type: AWS::EC2::Subnet
+    Properties:
+      AvailabilityZone: !Select [1, !GetAZs ""]
+      CidrBlock: !Ref pPriSub2CidrBlock
+      MapPublicIpOnLaunch: false
+      VpcId: !Ref rVpc
+
+  rProSub1:
+    Type: AWS::EC2::Subnet
+    Properties:
+      AvailabilityZone: !Select [0, !GetAZs ""]
+      CidrBlock: !Ref pProSub1CidrBlock
+      MapPublicIpOnLaunch: false
+      VpcId: !Ref rVpc
+
+  rProSub2:
+    Type: AWS::EC2::Subnet
+    Properties:
+      AvailabilityZone: !Select [1, !GetAZs ""]
+      CidrBlock: !Ref pProSub2CidrBlock
+      MapPublicIpOnLaunch: false
+      VpcId: !Ref rVpc
+      
+  ##########
+  ## Internet Gateway, and attachment to VPC
+  ##########
+
+  rVpcIgw:
+    Type: AWS::EC2::InternetGateway
+
+  rVpcIgwAttachment:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      InternetGatewayId: !Ref rVpcIgw
+      VpcId: !Ref rVpc
+
+  ##########
+  ## NAT Gateways in each Public Subnet with elastic IP addresses
+  ##########
+  
+  rNatEip1:
+    Type: AWS::EC2::EIP
+    DependsOn: rVpcIgwAttachment
+    Properties:
+      Domain: vpc
+
+  rNatEip2:
+    Type: AWS::EC2::EIP
+    DependsOn: rVpcIgwAttachment
+    Properties:
+      Domain: vpc
+
+  rNatGateway1:
+    Type: AWS::EC2::NatGateway
+    Properties:
+      AllocationId: !GetAtt rNatEip1.AllocationId
+      SubnetId: !Ref rPubSub1
+
+  rNatGateway2:
+    Type: AWS::EC2::NatGateway
+    Properties:
+      AllocationId: !GetAtt rNatEip2.AllocationId
+      SubnetId: !Ref rPubSub2
+
+  ##########
+  ## Route Tables for the subnets, and association
+  ##########
+  rPubSub1Rtable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref rVpc
+
+  rPubSub1RtableAssoc:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref rPubSub1Rtable
+      SubnetId: !Ref rPubSub1
+
+  rPubSub2Rtable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref rVpc
+
+  rPubSub2RtableAssoc:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref rPubSub2Rtable
+      SubnetId: !Ref rPubSub2
+
+  rPriSub1Rtable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref rVpc
+
+  rPriSub1RtableAssoc:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref rPriSub1Rtable
+      SubnetId: !Ref rPriSub1
+
+  rPriSub2Rtable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref rVpc
+
+  rPriSub2RtableAssoc:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref rPriSub2Rtable
+      SubnetId: !Ref rPriSub2
+
+  rProSub1Rtable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref rVpc
+
+  rProSub1RtableAssoc:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref rProSub1Rtable
+      SubnetId: !Ref rProSub1
+
+  rProSub2Rtable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref rVpc
+
+  rProSub2RtableAssoc:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref rProSub2Rtable
+      SubnetId: !Ref rProSub2
+
+  ##########
+  ## Routes for the Route Tables
+  ##########
+  rPubSub1IgwRoute:
+    Type: AWS::EC2::Route
+    Properties:
+      DestinationCidrBlock: "0.0.0.0/0"
+      GatewayId: !Ref rVpcIgw
+      RouteTableId: !Ref rPubSub1Rtable
+
+  rPubSub2IgwRoute:
+    Type: AWS::EC2::Route
+    Properties:
+      DestinationCidrBlock: "0.0.0.0/0"
+      GatewayId: !Ref rVpcIgw
+      RouteTableId: !Ref rPubSub2Rtable
+
+  rPriSub1NatRoute:
+    Type: AWS::EC2::Route
+    Properties:
+      DestinationCidrBlock: "0.0.0.0/0"
+      NatGatewayId: !Ref rNatGateway1
+      RouteTableId: !Ref rPriSub1Rtable
+
+  rPriSub2NatRoute:
+    Type: AWS::EC2::Route
+    Properties:
+      DestinationCidrBlock: "0.0.0.0/0"
+      NatGatewayId: !Ref rNatGateway2
+      RouteTableId: !Ref rPriSub2Rtable
+  ## protected subnet rt will use implicit local route,
+  ## no need to define any other routes because protected
