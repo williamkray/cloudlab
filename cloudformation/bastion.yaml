@@ -1,0 +1,129 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: Creates a simple autoscaling group across two AZs, with a single EC2 instance to be used as a Bastion host with SSH access.
+## TO-DO:
+## custom resource for SSH key creation
+## custom resource for ip whitelist ingress rules
+## allow for created SG in conjunction with list of other SGs
+
+Parameters:
+  pVpcId:
+    Type: String
+    Description: "VPC ID to deploy this bastion host to"
+  
+  pSubnets:
+    Type: List<AWS::EC2::Subnet::Id>
+    Description: "Public subnets of the VPC to put the bastion host in"
+
+  ## If security groups exist, we can define them here
+  pSecGroups:
+    Type: List<AWS::EC2::SecurityGroup::Id>
+    Description: "List of security group IDs to apply to the bastion host"
+
+  pSshKey:
+    Type: AWS::EC2::KeyPair::KeyName
+    Description: "SSH Keypair to use for access to the bastion host (if none is supplied, a key will be created and stored in a secure location in S3)"
+
+  pAmiId:
+    Type: String
+    Description: "Specific AMI ID to use (if none is supplied a fallback to Amazon Linux will be used)"
+
+  pAmiIdParameter:
+    Type: AWS::SSM::Parameter::Value<String>
+    Description: "Public Parameter Store value of latest Amazon Linux 2 AMI (used if a specific AMI ID is not defined)"
+    Default: '/aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2'
+
+  pInstanceType:
+    Type: String
+    Description: "Instance type to use for bastion hosts (if not supplied, default size will be chosen)"
+
+
+## organize our parameters a bit so they are more readable
+Metadata:
+  AWS::CloudFormation::Interface:
+    ParameterGroups:
+      - 
+        Label:
+          default: "Configuration"
+        Parameters:
+          - pVpcId
+          - pSubnets
+      -
+        Label:
+          default: "Optional and Conditional Parameters"
+        Parameters:
+          - pSecGroups
+          - pSshKey
+          - pAmiId
+          - pAmiIdParameter
+          - pInstanceType
+
+    ParameterLabels:
+      pVpcId:
+        default: "VPC to deploy to"
+      pSubnets:
+        default: "Subnets to use for the ASG"
+      pSecGroups:
+        default: "Security Groups"
+      pSshKey:
+        default: "SSH Key"
+      pAmiId: 
+        default: "AMI ID"
+      pAmiIdParameter:
+        default: "Default AMI Parameter Store Key"
+      pInstanceType:
+        default: "Instance Type"
+
+## Define conditions to determine when to create resources
+Conditions:
+  cCreateSshKey:
+    !Equals [!Ref pSshKey, ""]
+  cLookUpAmi:
+    !Equals [!Ref pAmiId, ""]
+  cUseDefaultInstanceType:
+    !Equals [!Ref pInstanceType, ""]
+
+Resources:
+  ##########
+  ## Custom Resource: SSH Key Generation
+  ##########
+
+  ##########
+  ## Custom Resource: IP Ingress Rule Expansion
+  ##########
+
+  ##########
+  ## AutoScaling Group and Launch Config
+  ##########
+  rBastionLaunchConfig:
+    Type: AWS::AutoScaling::LaunchConfiguration
+    Properties:
+      ImageId: 
+        Fn::If:
+          - cLookUpAmi
+          - !Ref pAmiIdParameter
+          - !Ref pAmiId
+      InstanceType:
+        Fn::If:
+          - cUseDefaultInstanceType
+          - t2.small
+          - !Ref pInstanceType
+      KeyName: 
+        Fn::If:
+          - cCreateSshKey
+          - AWS::NoValue
+          - !Ref pSshKey
+      SecurityGroups: !Ref pSecGroups
+
+  rBastionAsg:
+    Type: AWS::AutoScaling::AutoScalingGroup
+    Properties:
+      DesiredCapacity: 1
+      LaunchConfigurationName: !Ref rBastionLaunchConfig
+      MaxSize: 2
+      MinSize: 0
+      VPCZoneIdentifier: !Ref pSubnets
+      Tags:
+        - Key: Name
+          Value: !Sub "${AWS::StackName}-Bastion"
+          PropagateAtLaunch: true
+

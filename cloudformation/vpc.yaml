@@ -1,5 +1,9 @@
 AWSTemplateFormatVersion: "2010-09-09"
 Description: Creates a simple VPC across two Availability Zones
+## TO-DO:
+## add outputs for referenceable resources
+## add SAML owner tag to resources
+## add VPC flowlogs
 
 Parameters:
   pVpcCidrBlock:
@@ -37,12 +41,13 @@ Parameters:
     Default: "10.0.220.0/24"
     Description: "CIDR block for Protected Subnet 2"
 
+## organize our parameters a bit so they are more readable
 Metadata:
   AWS::CloudFormation::Interface:
     ParameterGroups:
       - 
         Label:
-          default: "Networking"
+          default: "VPC Networking"
         Parameters:
           - pVpcCidrBlock
           - pPubSub1CidrBlock
@@ -78,6 +83,9 @@ Resources:
       CidrBlock: !Ref pVpcCidrBlock
       EnableDnsSupport: true
       EnableDnsHostnames: true
+      Tags:
+        - Key: Name
+          Value: !Sub "${AWS::StackName}-VPC"
 
   rPubSub1:
     Type: AWS::EC2::Subnet
@@ -86,6 +94,9 @@ Resources:
       CidrBlock: !Ref pPubSub1CidrBlock
       MapPublicIpOnLaunch: true
       VpcId: !Ref rVpc
+      Tags:
+        - Key: Name
+          Value: !Sub "${AWS::StackName}-Public1"
 
   rPubSub2:
     Type: AWS::EC2::Subnet
@@ -94,6 +105,9 @@ Resources:
       CidrBlock: !Ref pPubSub2CidrBlock
       MapPublicIpOnLaunch: true
       VpcId: !Ref rVpc
+      Tags:
+        - Key: Name
+          Value: !Sub "${AWS::StackName}-Public2"
 
   rPriSub1:
     Type: AWS::EC2::Subnet
@@ -102,6 +116,9 @@ Resources:
       CidrBlock: !Ref pPriSub1CidrBlock
       MapPublicIpOnLaunch: false
       VpcId: !Ref rVpc
+      Tags:
+        - Key: Name
+          Value: !Sub "${AWS::StackName}-Private1"
 
   rPriSub2:
     Type: AWS::EC2::Subnet
@@ -110,6 +127,9 @@ Resources:
       CidrBlock: !Ref pPriSub2CidrBlock
       MapPublicIpOnLaunch: false
       VpcId: !Ref rVpc
+      Tags:
+        - Key: Name
+          Value: !Sub "${AWS::StackName}-Private2"
 
   rProSub1:
     Type: AWS::EC2::Subnet
@@ -118,6 +138,9 @@ Resources:
       CidrBlock: !Ref pProSub1CidrBlock
       MapPublicIpOnLaunch: false
       VpcId: !Ref rVpc
+      Tags:
+        - Key: Name
+          Value: !Sub "${AWS::StackName}-Protected1"
 
   rProSub2:
     Type: AWS::EC2::Subnet
@@ -126,6 +149,9 @@ Resources:
       CidrBlock: !Ref pProSub2CidrBlock
       MapPublicIpOnLaunch: false
       VpcId: !Ref rVpc
+      Tags:
+        - Key: Name
+          Value: !Sub "${AWS::StackName}-Protected2"
       
   ##########
   ## Internet Gateway, and attachment to VPC
@@ -133,6 +159,10 @@ Resources:
 
   rVpcIgw:
     Type: AWS::EC2::InternetGateway
+    Properties:
+      Tags:
+        - Key: Name
+          Value: !Sub "${AWS::StackName}-InetGateway"
 
   rVpcIgwAttachment:
     Type: AWS::EC2::VPCGatewayAttachment
@@ -161,12 +191,18 @@ Resources:
     Properties:
       AllocationId: !GetAtt rNatEip1.AllocationId
       SubnetId: !Ref rPubSub1
+      Tags:
+        - Key: Name
+          Value: !Sub "${AWS::StackName}-NAT1"
 
   rNatGateway2:
     Type: AWS::EC2::NatGateway
     Properties:
       AllocationId: !GetAtt rNatEip2.AllocationId
       SubnetId: !Ref rPubSub2
+      Tags:
+        - Key: Name
+          Value: !Sub "${AWS::StackName}-NAT2"
 
   ##########
   ## Route Tables for the subnets, and association
@@ -175,6 +211,9 @@ Resources:
     Type: AWS::EC2::RouteTable
     Properties:
       VpcId: !Ref rVpc
+      Tags:
+        - Key: Name
+          Value: !Sub "${AWS::StackName}-Public1"
 
   rPubSub1RtableAssoc:
     Type: AWS::EC2::SubnetRouteTableAssociation
@@ -186,6 +225,9 @@ Resources:
     Type: AWS::EC2::RouteTable
     Properties:
       VpcId: !Ref rVpc
+      Tags:
+        - Key: Name
+          Value: !Sub "${AWS::StackName}-Public2"
 
   rPubSub2RtableAssoc:
     Type: AWS::EC2::SubnetRouteTableAssociation
@@ -197,6 +239,9 @@ Resources:
     Type: AWS::EC2::RouteTable
     Properties:
       VpcId: !Ref rVpc
+      Tags:
+        - Key: Name
+          Value: !Sub "${AWS::StackName}-Private1"
 
   rPriSub1RtableAssoc:
     Type: AWS::EC2::SubnetRouteTableAssociation
@@ -208,6 +253,9 @@ Resources:
     Type: AWS::EC2::RouteTable
     Properties:
       VpcId: !Ref rVpc
+      Tags:
+        - Key: Name
+          Value: !Sub "${AWS::StackName}-Private2"
 
   rPriSub2RtableAssoc:
     Type: AWS::EC2::SubnetRouteTableAssociation
@@ -219,6 +267,9 @@ Resources:
     Type: AWS::EC2::RouteTable
     Properties:
       VpcId: !Ref rVpc
+      Tags:
+        - Key: Name
+          Value: !Sub "${AWS::StackName}-Protected1"
 
   rProSub1RtableAssoc:
     Type: AWS::EC2::SubnetRouteTableAssociation
@@ -230,6 +281,9 @@ Resources:
     Type: AWS::EC2::RouteTable
     Properties:
       VpcId: !Ref rVpc
+      Tags:
+        - Key: Name
+          Value: !Sub "${AWS::StackName}-Protected2"
 
   rProSub2RtableAssoc:
     Type: AWS::EC2::SubnetRouteTableAssociation
@@ -269,3 +323,20 @@ Resources:
       RouteTableId: !Ref rPriSub2Rtable
   ## protected subnet rt will use implicit local route,
   ## no need to define any other routes because protected
+
+Outputs:
+  oVpcId:
+    Description: VPC ID
+    Value: !Ref rVpc
+  oPubSubs:
+    Description: Public Subnet IDs
+    Value: !Join [',', [!Ref rPubSub1, !Ref rPubSub2]]
+  oPriSubs:
+    Description: Private Subnet IDs
+    Value: !Join [',', [!Ref rPriSub1, !Ref rPriSub2]]
+  oProSubs:
+    Description: Protected Subnet IDs
+    Value: !Join [',', [!Ref rProSub1, !Ref rProSub2]]
+  oDefaultSg:
+    Description: Default Security Group that allows all traffic from self-referenced SG
+    Value: !GetAtt [rVpc, DefaultSecurityGroup]

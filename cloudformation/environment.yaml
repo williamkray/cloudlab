@@ -1,0 +1,168 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: Creates all resources for a basic functional environment (VPC, Bastion host)
+
+Parameters:
+  ppVpcCidrBlock:
+    Type: String
+    Default: "10.0.0.0/16"
+    Description: "CIDR block of this VPC network"
+
+  ppPubSub1CidrBlock:
+    Type: String
+    Default: "10.0.10.0/24"
+    Description: "CIDR block for Public Subnet 1"
+
+  ppPubSub2CidrBlock:
+    Type: String
+    Default: "10.0.20.0/24"
+    Description: "CIDR block for Public Subnet 2"
+    
+  ppPriSub1CidrBlock:
+    Type: String
+    Default: "10.0.110.0/24"
+    Description: "CIDR block for Private Subnet 1"
+
+  ppPriSub2CidrBlock:
+    Type: String
+    Default: "10.0.120.0/24"
+    Description: "CIDR block for Private Subnet 2"
+    
+  ppProSub1CidrBlock:
+    Type: String
+    Default: "10.0.210.0/24"
+    Description: "CIDR block for Protected Subnet 1"
+
+  ppProSub2CidrBlock:
+    Type: String
+    Default: "10.0.220.0/24"
+    Description: "CIDR block for Protected Subnet 2"
+
+  ppTrustedIps:
+    Type: String
+    Description: "A single IP range to whitelist for Bastion Hosts"
+
+  ppSshKey:
+    Type: AWS::EC2::KeyPair::KeyName
+    Description: "SSH Keypair to use for access to the bastion host (if none is supplied, a key will be created and stored in a secure location in S3)"
+
+  ppAmiId:
+    Type: String
+    Description: "Specific AMI ID to use (if none is supplied a fallback to Amazon Linux will be used)"
+
+  ppAmiIdParameter:
+    Type: String
+    Description: "Public Parameter Store value of latest Amazon Linux 2 AMI (used if a specific AMI ID is not defined)"
+    Default: '/aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2'
+
+  ppInstanceType:
+    Type: String
+    Description: "Instance type to use for bastion hosts (if not supplied, default size will be chosen)"
+
+Metadata:
+  AWS::CloudFormation::Interface:
+    ParameterGroups:
+      - 
+        Label:
+          default: "Networking"
+        Parameters:
+          - ppVpcCidrBlock
+          - ppPubSub1CidrBlock
+          - ppPubSub2CidrBlock
+          - ppPriSub1CidrBlock
+          - ppPriSub2CidrBlock
+          - ppProSub1CidrBlock
+          - ppProSub2CidrBlock
+      -
+        Label:
+          default: "Bastion Configuration"
+        Parameters:
+          #- ppSecGroups
+          - ppTrustedIps
+          - ppSshKey
+          - ppAmiId
+          - ppAmiIdParameter
+          - ppInstanceType
+
+    ParameterLabels:
+      ppVpcCidrBlock:
+        default: "VPC CIDR Block"
+      ppPubSub1CidrBlock:
+        default: "CIDR Block for Public Subnet 1"
+      ppPubSub2CidrBlock:
+        default: "CIDR Block for Public Subnet 2"
+      ppPriSub1CidrBlock:
+        default: "CIDR Block for Private Subnet 1"
+      ppPriSub2CidrBlock:
+        default: "CIDR Block for Private Subnet 2"
+      ppProSub1CidrBlock:
+        default: "CIDR Block for Protected Subnet 1"
+      ppProSub2CidrBlock:
+        default: "CIDR Block for Protected Subnet 2"
+        #ppSecGroups:
+        #  default: "Security Groups"
+      ppTrustedIps:
+        default: "IP Range Whitelist"
+      ppSshKey:
+        default: "SSH Key"
+      ppAmiId: 
+        default: "AMI ID"
+      ppAmiIdParameter:
+        default: "Default AMI Parameter Store Key"
+      ppInstanceType:
+        default: "Instance Type"
+
+Resources:
+  ## creates a VPC
+  rVpcStack:
+    Type: AWS::CloudFormation::Stack
+    Properties:
+      TemplateURL: https://s3.amazonaws.com/wkray-lab-ops/cfn/vpc.yaml
+      Parameters:
+        pVpcCidrBlock: !Ref ppVpcCidrBlock
+        pPubSub1CidrBlock: !Ref ppPubSub1CidrBlock
+        pPubSub2CidrBlock: !Ref ppPubSub2CidrBlock
+        pPriSub1CidrBlock: !Ref ppPriSub1CidrBlock
+        pPriSub2CidrBlock: !Ref ppPriSub2CidrBlock
+        pProSub1CidrBlock: !Ref ppProSub1CidrBlock
+        pProSub2CidrBlock: !Ref ppProSub2CidrBlock
+
+  ## creates a security group that allows SSH on port 22 for the named trusted IP range
+  rBastionSg:
+    Type: AWS::CloudFormation::Stack
+    Properties:
+      TemplateURL: https://s3.amazonaws.com/wkray-lab-ops/cfn/sg.yaml
+      Parameters:
+        pTrustedIps: !Ref ppTrustedIps
+        pPort: 22
+        pVpcId: !GetAtt [rVpcStack, Outputs.oVpcId]
+
+  ## creates bastion host in ASG (1 instance, 2 AZs) with the bastion SG and VPC default SG attached
+  rBastionStack:
+    Type: AWS::CloudFormation::Stack
+    Properties:
+      TemplateURL: https://s3.amazonaws.com/wkray-lab-ops/cfn/bastion.yaml
+      Parameters:
+        pSecGroups: 
+          Fn::Join:
+            - ','
+            - 
+              - !GetAtt [rBastionSg, Outputs.oSecGroup]
+              - !GetAtt [rVpcStack, Outputs.oDefaultSg]
+        pSshKey: !Ref ppSshKey
+        pAmiId: !Ref ppAmiId
+        pAmiIdParameter: !Ref ppAmiIdParameter
+        pInstanceType: !Ref ppInstanceType
+        pSubnets: !GetAtt [rVpcStack, Outputs.oPubSubs]
+        pVpcId: !GetAtt [rVpcStack, Outputs.oVpcId]
+
+  ## creates an SG with port 443 open to the world because probably there's gonna be
+  ## something with SSL web access in this environment
+  rWebApp443Sg:
+    Type: AWS::CloudFormation::Stack
+    Properties:
+      TemplateURL: https://s3.amazonaws.com/wkray-lab-ops/cfn/sg.yaml
+      Parameters:
+        pTrustedIps: 0.0.0.0/0
+        pPort: 443
+        pVpcId: !GetAtt [rVpcStack, Outputs.oVpcId]
+

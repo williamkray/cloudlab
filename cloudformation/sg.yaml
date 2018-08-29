@@ -1,0 +1,44 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: Creates a Security Group with whitelisted ingress access on the given port
+## TO-DO: make this more dynamic to use either an IP range or another SG-ID
+
+Parameters:
+  pTrustedIps:
+    Type: String
+    Description: "A single IP range to whitelist (if this parameter is supplied, a new security group will be created with these IP ranges and all other security groups will be ignored)"
+
+  pPort:
+    Type: String
+    Description: "Port on which to grant Ingress traffic"
+
+  pVpcId:
+    Type: String
+    Description: "VPC ID to create this Security Group within"
+
+Resources:
+  ##########
+  ## Security Group
+  ##########
+  rSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: "Bastion Security Group for public-IP whitelisting"
+      VpcId: !Ref pVpcId
+      SecurityGroupIngress:
+        CidrIp: !Ref pTrustedIps
+        FromPort: !Ref pPort
+        ToPort: !Ref pPort
+        Description: "From CFN Parameter"
+        IpProtocol: -1
+      SecurityGroupEgress:
+        CidrIp: 0.0.0.0/0
+        FromPort: -1
+        ToPort: -1
+        Description: "All Traffic"
+        IpProtocol: -1
+
+Outputs:
+  oSecGroup:
+    Description: "Security Group ID"
+    Value: !Ref rSecurityGroup
+ 
