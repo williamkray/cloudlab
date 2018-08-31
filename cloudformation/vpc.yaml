@@ -1,9 +1,7 @@
 AWSTemplateFormatVersion: "2010-09-09"
 Description: Creates a simple VPC across two Availability Zones
 ## TO-DO:
-## add outputs for referenceable resources
 ## add SAML owner tag to resources
-## add VPC flowlogs
 
 Parameters:
   pVpcCidrBlock:

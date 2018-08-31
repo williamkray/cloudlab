@@ -1,0 +1,55 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: Creates resources required to enable VPC FlowLogs
+
+Parameters:
+  pVpcId:
+    Type: String
+    Description: "VPC ID to create FlowLog resources for"
+
+Resources:
+  ##########
+  ## IAM Role
+  ##########
+  rFlowLogRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          Sid: FlowLogs
+          Effect: Allow
+          Principal:
+            Service: vpc-flow-logs.amazonaws.com
+          Action: sts:AssumeRole
+      Path: /
+      Policies:
+        -
+          PolicyName: EnableFlowLogs
+          PolicyDocument:
+            Version: 2012-10-17
+            Statement:
+              -
+                Action:
+                  - logs:CreateLogGroup
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                  - logs:DescribeLogGroups
+                  - logs:DescribeLogStreams
+                Effect: Allow
+                Resource: "*"
+
+  rFlowLog:
+    Type: AWS::EC2::FlowLog
+    Properties:
+      DeliverLogsPermissionArn: !GetAtt [rFlowLogRole, Arn]
+      LogGroupName: !Sub "FlowLogs-${pVpcId}"
+      ResourceId: !Ref pVpcId
+      ResourceType: VPC
+      TrafficType: ALL
+
+
+Outputs:
+  oRoleArn:
+    Description: "FlowLog Role ARN"
+    Value: !GetAtt [rFlowLogRole, Arn]
+ 

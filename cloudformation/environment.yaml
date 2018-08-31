@@ -126,6 +126,14 @@ Resources:
         pProSub1CidrBlock: !Ref ppProSub1CidrBlock
         pProSub2CidrBlock: !Ref ppProSub2CidrBlock
 
+  ## creates flowlogs IAM role and flowlog for VPC
+  rFlowLogs:
+    Type: AWS::CloudFormation::Stack
+    Properties:
+      TemplateURL: https://s3.amazonaws.com/wkray-lab-ops/cfn/flowlogs.yaml
+      Parameters:
+        pVpcId: !GetAtt [rVpcStack, Outputs.oVpcId]
+
   ## creates a security group that allows SSH on port 22 for the named trusted IP range
   rBastionSg:
     Type: AWS::CloudFormation::Stack
