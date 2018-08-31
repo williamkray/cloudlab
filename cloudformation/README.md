@@ -33,6 +33,16 @@ Deploys "bastion" host resources. Features include:
   * Configuration accepts an AMI ID, or will pick the latest Amazon Linux 2 image for the associated region
   * Accepts a list of security-groups to use, or alternatively supply a CIDR range to whitelist to create a new security-group
 
+### sg.yaml
+
+Creates a security group that allows full outbound access, but inbout access from a given IP range on a given port (both of those factors are determined by parameters). This is a very simple security group, with the assumption that multiple rules should be separated into different SGs and stacked (default is up to five SGs per ENI). If more complex rules are required in a single SG, this will have to be done separately.
+
+TO-DO: plan to make this simple security-group resource capable of either IP range definition or security-group based rules (e.g. allowing ingress traffic from a given security group ID).
+
+### flowlogs.yaml
+
+Creates an IAM Role that grants the necessary permissions to create and read log events in CloudWatch Logs, then uses that to create a VPC FlowLog log group for the VPC indicated in the template parameter.
+
 ## Helpers
 
 ### s3sync.sh
