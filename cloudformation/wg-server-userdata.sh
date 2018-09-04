@@ -121,6 +121,10 @@ routes="10.0.0.0/16"
 
 cat << EOF > /etc/wireguard/self-peer-file.conf
 ### $server_hostname
+## NOTE: if you add this to a running client which has been started
+## with wg-quick, it will not add the routes automatically.
+## you must copy and paste this snippet into your wg-quick config file
+## and bring the interface down and up again, or manually add routes.
 
 [Peer]
 PublicKey = $server_pubkey
