@@ -1,5 +1,8 @@
 #!/usr/bin/env bash
 
+## installs and configures wireguard to be used as a vpn
+## this has been tested on amazon-linux-2 only!
+
 set -e
 
 ## set some variables we can use throughout this script
@@ -65,11 +68,13 @@ mkdir -p /etc/wireguard/peers
 
 ## add a systemd override that uses our update script above
 ## whenever systemctl reload wg-quick@interface is run
-mkdir /etc/systemd/system/wg-quick@.service.d
-cat << EOF > /etc/systemd/system/wg-quick@.service.d/override.conf
+mkdir -p /etc/systemd/system/wg-quick@.service.d
+if ! [[ -f /etc/systemd/system/wg-quick@.service.d/override.conf ]]; then
+  cat << EOF > /etc/systemd/system/wg-quick@.service.d/override.conf
 [Service]
 ExecReload=${wg_scripts_prefix}/update_peers.sh
 EOF
+fi
 systemctl daemon-reload
 
 ## generate a config file for this server so we can use wg-quick
@@ -99,7 +104,12 @@ fi
 systemctl enable wg-quick@${wg_interface_name}
 systemctl start wg-quick@${wg_interface_name}
 
+## from here on down, this doesn't have anything to do with the server itself,
+## this is just to make it easier to connect clients to the server.
+
 ## generate a peer config file that clients can use to connect to this instance
+## to-do: make this an action that can be triggered externally, and push the config
+## somewhere that the client/user can download it securely to use it
 server_pubkey="$(cat /etc/wireguard/keys/pubkey)"
 server_hostname="$(hostname)"
 server_endpoint="$(curl -s whatismyip.akamai.com):${wg_server_port}"
